@@ -175,3 +175,34 @@ tags
 /checkpoints/
 exp
 .gradio/
+
+# Caption generation outputs
+outputs/captions/
+outputs/*.wav
+outputs/*.srt
+outputs/*.vtt
+outputs/*.json
+outputs/*.transcript
+outputs/*.script_timing
+
+# Podcast pipeline files
+podcasts/
+logs/
+*.log
+
+# Stock digest files
+stock_digests/
+
+# Node.js dependencies
+node_modules/
+
+# Generated caption files
+*.srt
+*.vtt
+*.json
+*.transcript
+*.script_timing
+
+# Temporary files
+*.tmp
+*.temp

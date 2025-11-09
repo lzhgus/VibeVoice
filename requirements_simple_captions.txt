@@ -1,0 +1,13 @@
+# Requirements for VibeVoice Simple Caption functionality
+# Install with: pip install -r requirements_simple_captions.txt
+
+# No additional dependencies required!
+# Simple captions work with the existing VibeVoice installation.
+
+# Optional: Enhanced audio processing (if not already installed)
+# librosa>=0.10.0
+# soundfile>=0.12.0
+
+# Optional: Better file handling
+# pathlib (built-in with Python 3.4+)
+

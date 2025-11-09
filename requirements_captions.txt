@@ -1,0 +1,15 @@
+# Additional requirements for VibeVoice Caption functionality
+# Install with: pip install -r requirements_captions.txt
+
+# Speech-to-text transcription
+openai-whisper>=20231117
+
+# Audio processing (if not already installed)
+librosa>=0.10.0
+soundfile>=0.12.0
+
+# Optional: Enhanced audio processing
+pydub>=0.25.1
+
+# Optional: Better caption formatting
+webvtt-py>=0.4.6
