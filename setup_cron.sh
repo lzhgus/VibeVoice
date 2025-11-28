@@ -7,6 +7,9 @@
 API_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxbGdxd3Bsb2ZibHBwdHJ3dWFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5Mjc0OTUsImV4cCI6MjA3MTUwMzQ5NX0.6YiKaZZIhyr_6nOaDfLvhsCNHvWMLkKaMU4zRkKGi3s"
 MODEL_PATH="/home/frank/ml/models/microsoft/VibeVoice-1.5B"
 SCRIPT_PATH="/home/frank/ml/VibeVoice/run_podcast_pipeline.sh"
+STOCK_SCRIPT_PATH="/home/frank/ml/VibeVoice/run_stock_digest_pipeline.sh"
+# Update the ticker list as needed
+STOCK_TICKERS=("MSFT" "NVDA")
 
 # Remove existing cron jobs for this script
 echo "Setting up cron jobs for podcast pipeline..."
@@ -15,7 +18,7 @@ echo "Setting up cron jobs for podcast pipeline..."
 TEMP_CRON=$(mktemp)
 
 # Get existing crontab (excluding our podcast pipeline jobs)
-crontab -l 2>/dev/null | grep -v "run_podcast_pipeline.sh" > "$TEMP_CRON"
+crontab -l 2>/dev/null | grep -v "run_podcast_pipeline.sh" | grep -v "run_stock_digest_pipeline.sh" > "$TEMP_CRON"
 
 # Add new cron jobs with UTC times
 # Morning: 12:35 PM UTC (constant year-round)
@@ -28,6 +31,12 @@ echo "35 12 * * * cd /home/frank/ml/VibeVoice && ./run_podcast_pipeline.sh \"\$(
 echo "# Podcast Pipeline - Evening (21:35 PM UTC)" >> "$TEMP_CRON"
 echo "35 21 * * * cd /home/frank/ml/VibeVoice && ./run_podcast_pipeline.sh \"\$(date +\%Y-\%m-\%d)\" \"evening\" \"$API_KEY\" \"$MODEL_PATH\" >> /home/frank/ml/VibeVoice/logs/evening_\$(date +\%Y\%m\%d).log 2>&1" >> "$TEMP_CRON"
 
+# Add stock digest cron jobs at 13:00 UTC
+echo "# Stock Digest Pipeline (13:00 UTC)" >> "$TEMP_CRON"
+for ticker in "${STOCK_TICKERS[@]}"; do
+    echo "0 13 * * * cd /home/frank/ml/VibeVoice && ./run_stock_digest_pipeline.sh \"${ticker}\" \"\$(date +\%Y-\%m-\%d)\" \"$API_KEY\" \"$MODEL_PATH\" >> /home/frank/ml/VibeVoice/logs/stock_${ticker}_\$(date +\%Y\%m\%d).log 2>&1" >> "$TEMP_CRON"
+done
+
 # Install the new crontab
 crontab "$TEMP_CRON"
 
@@ -39,6 +48,7 @@ echo ""
 echo "Scheduled jobs (UTC times):"
 echo "- Morning: 12:35 PM UTC (daily, year-round)"
 echo "- Evening: 20:35 PM UTC (daily, year-round)"
+echo "- Stock Digest: 13:00 PM UTC (daily, year-round)"
 echo ""
 echo "Note: Since system is now in UTC, no DST adjustments needed!"
 echo ""
@@ -47,6 +57,7 @@ crontab -l
 
 # Create logs directory if it doesn't exist
 mkdir -p /home/frank/ml/VibeVoice/logs
+mkdir -p /home/frank/ml/VibeVoice/logs/stock_digests
 
 echo ""
 echo "Logs will be saved to: /home/frank/ml/VibeVoice/logs/"

@@ -37,7 +37,7 @@ echo "Extracted filename: $FILENAME"
 # Step 2: Run Python inference
 echo ""
 echo "Step 2: Running Python inference..."
-PYTHON_OUTPUT=$(python demo/inference_simple_captions.py --model_path "$MODEL_PATH" --txt_path "$FILENAME" --speaker_names Alice Frank --device cuda --generate_captions --caption_formats srt)
+PYTHON_OUTPUT=$(python demo/batch_inference_simple_captions.py --model_path "$MODEL_PATH" --txt_path "$FILENAME" --speaker_names Alice Frank --device cuda --generate_captions --caption_formats srt)
 echo "Python script output: $PYTHON_OUTPUT"
 
 # Check if PYTHON_FILENAME is empty or none
@@ -62,10 +62,9 @@ FILENAME_BASE=$(basename "$PYTHON_FILENAME")
 ID=$(echo "$FILENAME_BASE" | sed 's/_generated.*//' | sed 's/.*_//')
 echo "Extracted ID: $ID"
 
-# Step 3: Upload podcast audio
+# Step 2.5: Convert WAV to MP3 to reduce file size
 echo ""
-echo "Step 3: Uploading podcast audio..."
-echo "Uploading file: $PYTHON_FILENAME"
+echo "Step 2.5: Converting WAV to MP3..."
 
 # Check if file exists
 if [ ! -f "$PYTHON_FILENAME" ]; then
@@ -76,7 +75,52 @@ if [ ! -f "$PYTHON_FILENAME" ]; then
     exit 1
 fi
 
-node ~/captital-sound/capital-sound/CapitalSoundApp/uploadPodcastAudio.js -f "$PYTHON_FILENAME" -d "$ID" -k "$API_KEY" -m '{"duration": 900}'
+# Check if ffmpeg is available
+if command -v ffmpeg &> /dev/null; then
+    # Convert WAV to MP3
+    MP3_FILENAME="${PYTHON_FILENAME%.wav}.mp3"
+    echo "Converting $PYTHON_FILENAME to $MP3_FILENAME..."
+
+    # Get original file size
+    WAV_SIZE=$(stat -f%z "$PYTHON_FILENAME" 2>/dev/null || stat -c%s "$PYTHON_FILENAME" 2>/dev/null || echo "0")
+    WAV_SIZE_MB=$(echo "scale=2; $WAV_SIZE / 1024 / 1024" | bc 2>/dev/null || echo "0")
+    echo "Original WAV file size: ${WAV_SIZE_MB} MB"
+
+    # Convert to MP3 with good quality (192kbps)
+    if ffmpeg -i "$PYTHON_FILENAME" -codec:a libmp3lame -b:a 192k -y "$MP3_FILENAME" 2>/dev/null; then
+        # Get MP3 file size
+        MP3_SIZE=$(stat -f%z "$MP3_FILENAME" 2>/dev/null || stat -c%s "$MP3_FILENAME" 2>/dev/null || echo "0")
+        MP3_SIZE_MB=$(echo "scale=2; $MP3_SIZE / 1024 / 1024" | bc 2>/dev/null || echo "0")
+        REDUCTION=$(echo "scale=1; (1 - $MP3_SIZE / $WAV_SIZE) * 100" | bc 2>/dev/null || echo "0")
+        echo "✅ Converted to MP3: ${MP3_SIZE_MB} MB (${REDUCTION}% reduction)"
+
+        # Use MP3 file for upload
+        UPLOAD_FILENAME="$MP3_FILENAME"
+    else
+        echo "⚠️  Warning: MP3 conversion failed, using original WAV file"
+        UPLOAD_FILENAME="$PYTHON_FILENAME"
+    fi
+else
+    echo "⚠️  Warning: ffmpeg not found. Install ffmpeg to convert WAV to MP3 and reduce file size."
+    echo "   Install with: sudo apt-get install ffmpeg (Ubuntu/Debian) or brew install ffmpeg (macOS)"
+    UPLOAD_FILENAME="$PYTHON_FILENAME"
+fi
+
+# Step 3: Upload podcast audio
+echo ""
+echo "Step 3: Uploading podcast audio..."
+echo "Uploading file: $UPLOAD_FILENAME"
+
+# Check if upload file exists
+if [ ! -f "$UPLOAD_FILENAME" ]; then
+    echo "❌ Error: File not found: $UPLOAD_FILENAME"
+    echo "Current directory: $(pwd)"
+    echo "Files in current directory:"
+    ls -la
+    exit 1
+fi
+
+node ~/captital-sound/capital-sound/CapitalSoundApp/uploadPodcastAudio.js -f "$UPLOAD_FILENAME" -d "$ID" -k "$API_KEY"
 
 # Step 4: Upload SRT caption file
 echo ""

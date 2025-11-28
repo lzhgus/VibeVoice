@@ -171,6 +171,7 @@ tags
 # our proj
 /output/
 /outputs/
+/batch_outputs/
 /checkpoint/
 /checkpoints/
 exp
@@ -184,6 +185,7 @@ outputs/*.vtt
 outputs/*.json
 outputs/*.transcript
 outputs/*.script_timing
+batch_outputs/.*
 
 # Podcast pipeline files
 podcasts/

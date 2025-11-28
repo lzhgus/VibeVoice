@@ -3,6 +3,7 @@ from typing import Dict, List, Optional, Tuple, Union, Callable
 from tqdm import tqdm
 import torch
 import torch.nn as nn
+from torch.cuda.amp import autocast
 
 from transformers.models.auto import AutoModel, AutoModelForCausalLM
 
@@ -474,17 +475,25 @@ class VibeVoiceForConditionalGenerationInference(VibeVoicePreTrainedModel, Gener
                 _ = model_inputs.pop('inputs_embeds', None)
                 prefill_inputs = {'inputs_embeds': inputs_embeds}
 
-            # Forward pass through the model
-            outputs = self(
-                **model_inputs, **prefill_inputs, logits_to_keep=1, return_dict=True, output_attentions=False, output_hidden_states=False,
-            )
+            # Forward pass through the model with mixed precision for better performance
+            # Use autocast to leverage tensor cores on RTX 5090
+            # Note: If model is compiled with torch.compile(), this reduces Python overhead significantly
+            with autocast(dtype=torch.bfloat16, enabled=device.type == 'cuda'):
+                outputs = self(
+                    **model_inputs, **prefill_inputs, logits_to_keep=1, return_dict=True, output_attentions=False, output_hidden_states=False,
+                )
             model_kwargs = self._update_model_kwargs_for_generation(
                 outputs, model_kwargs, is_encoder_decoder=False,
             )
 
             # Get logits and apply logits processor
-            next_token_logits = outputs.logits[:, -1, :].to(copy=True, dtype=torch.float32, device=input_ids.device)
-            # next_token_logits = outputs.logits[:, -1, :].to(copy=True, device=input_ids.device)
+            # Optimized: minimize CPU-GPU transfers and dtype conversions
+            # Keep operations on GPU as much as possible
+            next_token_logits = outputs.logits[:, -1, :]  # Already on GPU
+            # Only convert to float32 if absolutely necessary (most processors work with bfloat16)
+            # Avoid unnecessary device transfers (should already be on correct device)
+            if next_token_logits.dtype != torch.float32:
+                next_token_logits = next_token_logits.to(dtype=torch.float32, non_blocking=True)
             next_token_scores = logits_processor(input_ids, next_token_logits)
             
             # token selection
@@ -505,9 +514,11 @@ class VibeVoiceForConditionalGenerationInference(VibeVoicePreTrainedModel, Gener
                     negative_model_inputs['inputs_embeds'] = inputs_embeds
                     negative_model_inputs['input_ids'] = None
 
-                negative_outputs = self(
-                    **negative_model_inputs, logits_to_keep=0, return_dict=True, output_attentions=False, output_hidden_states=False,
-                )
+                # Use mixed precision for negative pass as well
+                with autocast(dtype=torch.bfloat16, enabled=device.type == 'cuda'):
+                    negative_outputs = self(
+                        **negative_model_inputs, logits_to_keep=0, return_dict=True, output_attentions=False, output_hidden_states=False,
+                    )
                 negative_model_kwargs = self._update_model_kwargs_for_generation(
                     negative_outputs, negative_model_kwargs, is_encoder_decoder=False,
                 )
@@ -516,12 +527,14 @@ class VibeVoiceForConditionalGenerationInference(VibeVoicePreTrainedModel, Gener
             # reached end of generation
             if (next_tokens == generation_config.eos_token_id).any():
                 eos_indices = (next_tokens == generation_config.eos_token_id).nonzero(as_tuple=False).squeeze(1)
-                # Only print for samples that are newly finished (not already marked as finished)
+                # Only process samples that are newly finished (not already marked as finished)
                 new_eos_indices = eos_indices[~finished_tags[eos_indices]]
                 if new_eos_indices.numel() > 0:
                     finished_tags[new_eos_indices] = True
-                    if verbose:
-                        print(f"Samples {new_eos_indices.tolist()} reached EOS token at step {step + 1}.", flush=True)
+                    # Reduced verbose output - only print every 10 steps or when critical
+                    if verbose and (step % 10 == 0 or new_eos_indices.numel() == batch_size):
+                        # Avoid .tolist() if possible - keep on GPU
+                        print(f"Samples {new_eos_indices.cpu().tolist()} reached EOS token at step {step + 1}.", flush=True)
                     if audio_streamer is not None:
                         audio_streamer.end(new_eos_indices)
 
@@ -531,8 +544,9 @@ class VibeVoiceForConditionalGenerationInference(VibeVoicePreTrainedModel, Gener
             if new_max_length_indices.numel() > 0:
                 finished_tags[new_max_length_indices] = True
                 reach_max_step_sample[new_max_length_indices] = True
+                # Reduced verbose output to minimize CPU overhead
                 if verbose:
-                    print(f"Samples {new_max_length_indices.tolist()} reached max generation length at step {step + 1}.", flush=True)
+                    print(f"Samples {new_max_length_indices.cpu().tolist()} reached max generation length at step {step + 1}.", flush=True)
                 if audio_streamer is not None:
                     audio_streamer.end(new_max_length_indices)
 
@@ -546,21 +560,22 @@ class VibeVoiceForConditionalGenerationInference(VibeVoicePreTrainedModel, Gener
             # speech_begin
             diffusion_start_indices = torch.arange(batch_size, device=device)[~finished_tags & (next_tokens == generation_config.speech_start_id)]
             if diffusion_start_indices.numel() > 0 and kwargs.get('refresh_negative', True):
-                # update attention mask
-                for i, sample_idx in enumerate(diffusion_start_indices.tolist()):
-                    negative_model_kwargs['attention_mask'][sample_idx, :] = 0
-                    negative_model_kwargs['attention_mask'][sample_idx, -1] = 1
-                # update past key values
-                for layer_idx, (k_cache, v_cache) in enumerate(zip(negative_model_kwargs['past_key_values'].key_cache, 
-                                                                        negative_model_kwargs['past_key_values'].value_cache)):
-                    # Process each non-diffusion sample
-                    for sample_idx in diffusion_start_indices.tolist():
-                        # Shift cache for this sample
-                        k_cache[sample_idx, :, -1, :] = k_cache[sample_idx, :, 0, :].clone()
-                        v_cache[sample_idx, :, -1, :] = v_cache[sample_idx, :, 0, :].clone()
-                # update negative_input_ids
-                for sample_idx in diffusion_start_indices.tolist():
-                    negative_input_ids[sample_idx, -1] = generation_config.speech_start_id
+                # Vectorized update of attention mask (optimized: no Python loop)
+                if diffusion_start_indices.numel() > 0:
+                    negative_model_kwargs['attention_mask'][diffusion_start_indices, :] = 0
+                    negative_model_kwargs['attention_mask'][diffusion_start_indices, -1] = 1
+                
+                # Vectorized update of past key values (optimized: batch operations)
+                if diffusion_start_indices.numel() > 0:
+                    for layer_idx, (k_cache, v_cache) in enumerate(zip(negative_model_kwargs['past_key_values'].key_cache, 
+                                                                            negative_model_kwargs['past_key_values'].value_cache)):
+                        # Vectorized cache shift for all samples at once
+                        k_cache[diffusion_start_indices, :, -1, :] = k_cache[diffusion_start_indices, :, 0, :].clone()
+                        v_cache[diffusion_start_indices, :, -1, :] = v_cache[diffusion_start_indices, :, 0, :].clone()
+                
+                # Vectorized update of negative_input_ids (optimized: no Python loop)
+                if diffusion_start_indices.numel() > 0:
+                    negative_input_ids[diffusion_start_indices, -1] = generation_config.speech_start_id
             
             # Prepare inputs_embeds for next iteration
             # Initialize with default embeddings for all tokens
