@@ -327,7 +327,8 @@ def main():
             cfg_scale=args.cfg_scale,
             tokenizer=processor.tokenizer,
             generation_config={'do_sample': False},
-            verbose=False,  # Reduce output for batch processing
+            verbose=False,  # Reduce verbose output for batch processing
+            show_progress_bar=True,  # Show progress bar for each batch
         )
         batch_time = time.time() - batch_start
         
@@ -388,6 +389,11 @@ def main():
     # Shell scripts look for "Saved audio to: <filename>"
     if single_file_mode and saved_files_all:
         print(f"\nSaved audio to: {saved_files_all[0]}")
+    elif not single_file_mode and saved_files_all:
+        # Print all saved files for batch mode (one per line)
+        print(f"\nSaved audio files:")
+        for saved_file in saved_files_all:
+            print(f"Saved audio to: {saved_file}")
 
 
 if __name__ == "__main__":

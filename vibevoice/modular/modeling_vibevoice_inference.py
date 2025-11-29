@@ -424,7 +424,8 @@ class VibeVoiceForConditionalGenerationInference(VibeVoicePreTrainedModel, Gener
 
         # Create progress iterator if verbose
         if kwargs.get("show_progress_bar", True):
-            progress_bar = tqdm(range(max_steps), desc="Generating", leave=False)
+            # Use leave=True to keep progress bar visible after completion
+            progress_bar = tqdm(range(max_steps), desc="Generating", leave=True, ncols=100, mininterval=0.5)
         else:
             progress_bar = range(max_steps)
         
@@ -447,7 +448,7 @@ class VibeVoiceForConditionalGenerationInference(VibeVoicePreTrainedModel, Gener
             
             if finished_tags.all():
                 if hasattr(progress_bar, 'set_description'):
-                    progress_bar.set_description("Generation complete")
+                    progress_bar.set_description(f"Generation complete ({step + 1}/{max_steps})")
                 break
 
             if input_ids.shape[-1] >= generation_config.max_length:
@@ -457,10 +458,11 @@ class VibeVoiceForConditionalGenerationInference(VibeVoicePreTrainedModel, Gener
                     reach_max_step_sample[reached_samples] = True
                 break
             
-            # Update progress bar description with active samples
+            # Update progress bar description with active samples and step info
             if hasattr(progress_bar, 'set_description'):
                 active_samples = (~finished_tags).sum().item()
-                progress_bar.set_description(f"Generating (active: {active_samples}/{batch_size})")
+                progress_bar.set_description(f"Generating step {step + 1}/{max_steps} (active: {active_samples}/{batch_size})")
+                progress_bar.refresh()  # Force refresh to show updates in real-time
 
             model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
             if is_prefill:
@@ -568,7 +570,7 @@ class VibeVoiceForConditionalGenerationInference(VibeVoicePreTrainedModel, Gener
                 # Vectorized update of past key values (optimized: batch operations)
                 if diffusion_start_indices.numel() > 0:
                     for layer_idx, (k_cache, v_cache) in enumerate(zip(negative_model_kwargs['past_key_values'].key_cache, 
-                                                                            negative_model_kwargs['past_key_values'].value_cache)):
+                                                                        negative_model_kwargs['past_key_values'].value_cache)):
                         # Vectorized cache shift for all samples at once
                         k_cache[diffusion_start_indices, :, -1, :] = k_cache[diffusion_start_indices, :, 0, :].clone()
                         v_cache[diffusion_start_indices, :, -1, :] = v_cache[diffusion_start_indices, :, 0, :].clone()
