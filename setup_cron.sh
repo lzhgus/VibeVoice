@@ -9,7 +9,7 @@ MODEL_PATH="/home/frank/ml/models/microsoft/VibeVoice-1.5B"
 SCRIPT_PATH="/home/frank/ml/VibeVoice/run_podcast_pipeline.sh"
 STOCK_SCRIPT_PATH="/home/frank/ml/VibeVoice/run_stock_digest_pipeline.sh"
 # Update the ticker list as needed
-STOCK_TICKERS=("MSFT" "NVDA")
+# STOCK_TICKERS=("MSFT" "NVDA")
 
 # Remove existing cron jobs for this script
 echo "Setting up cron jobs for podcast pipeline..."
@@ -32,10 +32,9 @@ echo "# Podcast Pipeline - Evening (21:35 PM UTC)" >> "$TEMP_CRON"
 echo "35 21 * * * cd /home/frank/ml/VibeVoice && ./run_podcast_pipeline.sh \"\$(date +\%Y-\%m-\%d)\" \"evening\" \"$API_KEY\" \"$MODEL_PATH\" >> /home/frank/ml/VibeVoice/logs/evening_\$(date +\%Y\%m\%d).log 2>&1" >> "$TEMP_CRON"
 
 # Add stock digest cron jobs at 13:00 UTC
-echo "# Stock Digest Pipeline (13:00 UTC)" >> "$TEMP_CRON"
-for ticker in "${STOCK_TICKERS[@]}"; do
-    echo "0 13 * * * cd /home/frank/ml/VibeVoice && ./run_stock_digest_pipeline.sh \"${ticker}\" \"\$(date +\%Y-\%m-\%d)\" \"$API_KEY\" \"$MODEL_PATH\" >> /home/frank/ml/VibeVoice/logs/stock_${ticker}_\$(date +\%Y\%m\%d).log 2>&1" >> "$TEMP_CRON"
-done
+# Process all available digests for the date (no ticker filter)
+echo "# Stock Digest Pipeline (13:00 UTC) - Batch processing all available digests" >> "$TEMP_CRON"
+echo "0 13 * * * cd /home/frank/ml/VibeVoice && ./run_stock_digest_pipeline.sh \"\$(date +\%Y-\%m-\%d)\" \"$API_KEY\" \"$MODEL_PATH\" >> /home/frank/ml/VibeVoice/logs/stock_digest_\$(date +\%Y\%m\%d).log 2>&1" >> "$TEMP_CRON"
 
 # Install the new crontab
 crontab "$TEMP_CRON"
@@ -47,8 +46,8 @@ echo "✅ Cron jobs installed successfully!"
 echo ""
 echo "Scheduled jobs (UTC times):"
 echo "- Morning: 12:35 PM UTC (daily, year-round)"
-echo "- Evening: 20:35 PM UTC (daily, year-round)"
-echo "- Stock Digest: 13:00 PM UTC (daily, year-round)"
+echo "- Evening: 21:35 PM UTC (daily, year-round)"
+echo "- Stock Digest: 13:00 UTC (daily, processes all available digests for the date)"
 echo ""
 echo "Note: Since system is now in UTC, no DST adjustments needed!"
 echo ""
