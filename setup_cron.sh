@@ -21,15 +21,22 @@ TEMP_CRON=$(mktemp)
 crontab -l 2>/dev/null | grep -v "run_podcast_pipeline.sh" | grep -v "run_stock_digest_pipeline.sh" > "$TEMP_CRON"
 
 # Add new cron jobs with UTC times
-# Morning: 12:35 PM UTC (constant year-round)
-# Evening: 20:35 PM UTC (constant year-round)
+# Morning: 12:35 PM UTC (Monday-Friday only, excludes weekends)
+# Evening: 21:35 PM UTC (Monday-Friday only, excludes weekends)
 # Since system is now in UTC, we can use simple daily schedules
 
-echo "# Podcast Pipeline - Morning (12:35 PM UTC)" >> "$TEMP_CRON"
-echo "35 12 * * * cd /home/frank/ml/VibeVoice && ./run_podcast_pipeline.sh \"\$(date +\%Y-\%m-\%d)\" \"morning\" \"$API_KEY\" \"$MODEL_PATH\" >> /home/frank/ml/VibeVoice/logs/morning_\$(date +\%Y\%m\%d).log 2>&1" >> "$TEMP_CRON"
+echo "# Podcast Pipeline - Morning (12:35 PM UTC, Monday-Friday)" >> "$TEMP_CRON"
+echo "35 12 * * 1-5 cd /home/frank/ml/VibeVoice && ./run_podcast_pipeline.sh \"\$(date +\%Y-\%m-\%d)\" \"morning\" \"$API_KEY\" \"$MODEL_PATH\" >> /home/frank/ml/VibeVoice/logs/morning_\$(date +\%Y\%m\%d).log 2>&1" >> "$TEMP_CRON"
 
-echo "# Podcast Pipeline - Evening (21:35 PM UTC)" >> "$TEMP_CRON"
-echo "35 21 * * * cd /home/frank/ml/VibeVoice && ./run_podcast_pipeline.sh \"\$(date +\%Y-\%m-\%d)\" \"evening\" \"$API_KEY\" \"$MODEL_PATH\" >> /home/frank/ml/VibeVoice/logs/evening_\$(date +\%Y\%m\%d).log 2>&1" >> "$TEMP_CRON"
+echo "# Podcast Pipeline - Evening (21:35 PM UTC, Monday-Friday)" >> "$TEMP_CRON"
+echo "35 21 * * 1-5 cd /home/frank/ml/VibeVoice && ./run_podcast_pipeline.sh \"\$(date +\%Y-\%m-\%d)\" \"evening\" \"$API_KEY\" \"$MODEL_PATH\" >> /home/frank/ml/VibeVoice/logs/evening_\$(date +\%Y\%m\%d).log 2>&1" >> "$TEMP_CRON"
+
+# Add weekly cron jobs for Saturday and Sunday (morning only)
+echo "# Podcast Pipeline - Weekly Saturday (12:35 PM UTC)" >> "$TEMP_CRON"
+echo "35 12 * * 6 cd /home/frank/ml/VibeVoice && ./run_podcast_pipeline.sh \"\$(date +\%Y-\%m-\%d)\" \"weekly\" \"$API_KEY\" \"$MODEL_PATH\" >> /home/frank/ml/VibeVoice/logs/weekly_saturday_\$(date +\%Y\%m\%d).log 2>&1" >> "$TEMP_CRON"
+
+echo "# Podcast Pipeline - Weekly Sunday (12:35 PM UTC)" >> "$TEMP_CRON"
+echo "35 12 * * 0 cd /home/frank/ml/VibeVoice && ./run_podcast_pipeline.sh \"\$(date +\%Y-\%m-\%d)\" \"weekly\" \"$API_KEY\" \"$MODEL_PATH\" >> /home/frank/ml/VibeVoice/logs/weekly_sunday_\$(date +\%Y\%m\%d).log 2>&1" >> "$TEMP_CRON"
 
 # Add stock digest cron jobs at 13:00 UTC
 # Process all available digests for the date (no ticker filter)
@@ -45,8 +52,10 @@ rm "$TEMP_CRON"
 echo "✅ Cron jobs installed successfully!"
 echo ""
 echo "Scheduled jobs (UTC times):"
-echo "- Morning: 12:35 PM UTC (daily, year-round)"
-echo "- Evening: 21:35 PM UTC (daily, year-round)"
+echo "- Morning: 12:35 PM UTC (Monday-Friday only)"
+echo "- Evening: 21:35 PM UTC (Monday-Friday only)"
+echo "- Weekly Saturday: 12:35 PM UTC (morning only, weekly)"
+echo "- Weekly Sunday: 12:35 PM UTC (morning only, weekly)"
 echo "- Stock Digest: 13:00 UTC (daily, processes all available digests for the date)"
 echo ""
 echo "Note: Since system is now in UTC, no DST adjustments needed!"
