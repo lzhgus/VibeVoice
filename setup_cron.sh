@@ -33,10 +33,10 @@ echo "35 21 * * 1-5 cd /home/frank/ml/VibeVoice && ./run_podcast_pipeline.sh \"\
 
 # Add weekly cron jobs for Saturday and Sunday (morning only)
 echo "# Podcast Pipeline - Weekly Saturday (12:35 PM UTC)" >> "$TEMP_CRON"
-echo "35 12 * * 6 cd /home/frank/ml/VibeVoice && ./run_podcast_pipeline.sh \"\$(date +\%Y-\%m-\%d)\" \"weekly\" \"$API_KEY\" \"$MODEL_PATH\" >> /home/frank/ml/VibeVoice/logs/weekly_saturday_\$(date +\%Y\%m\%d).log 2>&1" >> "$TEMP_CRON"
+echo "35 21 * * 6 cd /home/frank/ml/VibeVoice && ./run_podcast_pipeline.sh \"\$(date +\%Y-\%m-\%d)\" \"weekly\" \"$API_KEY\" \"$MODEL_PATH\" >> /home/frank/ml/VibeVoice/logs/weekly_saturday_\$(date +\%Y\%m\%d).log 2>&1" >> "$TEMP_CRON"
 
 echo "# Podcast Pipeline - Weekly Sunday (12:35 PM UTC)" >> "$TEMP_CRON"
-echo "35 12 * * 0 cd /home/frank/ml/VibeVoice && ./run_podcast_pipeline.sh \"\$(date +\%Y-\%m-\%d)\" \"weekly\" \"$API_KEY\" \"$MODEL_PATH\" >> /home/frank/ml/VibeVoice/logs/weekly_sunday_\$(date +\%Y\%m\%d).log 2>&1" >> "$TEMP_CRON"
+echo "35 21 * * 0 cd /home/frank/ml/VibeVoice && ./run_podcast_pipeline.sh \"\$(date +\%Y-\%m-\%d)\" \"weekly\" \"$API_KEY\" \"$MODEL_PATH\" >> /home/frank/ml/VibeVoice/logs/weekly_sunday_\$(date +\%Y\%m\%d).log 2>&1" >> "$TEMP_CRON"
 
 # Add stock digest cron jobs at 13:00 UTC
 # Process all available digests for the date (no ticker filter)
