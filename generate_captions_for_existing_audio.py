@@ -55,7 +55,8 @@ def generate_captions_for_audio(audio_path, script_path, speaker_names, output_d
         caption_segments = generator.generate_captions_from_script(
             script=script_content,
             audio_duration=duration,
-            speaker_mapping=speaker_mapping
+            speaker_mapping=speaker_mapping,
+            audio_path=audio_path
         )
         
         print(f"✅ Generated {len(caption_segments)} caption segments")

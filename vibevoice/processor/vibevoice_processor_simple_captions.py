@@ -147,7 +147,8 @@ class VibeVoiceProcessorSimpleCaptions(VibeVoiceProcessor):
                 caption_segments = self.caption_generator.generate_captions_from_script(
                     script=original_script,
                     audio_duration=audio_duration,
-                    speaker_mapping=speaker_mapping
+                    speaker_mapping=speaker_mapping,
+                    audio_path=audio_paths[0] if audio_paths else None
                 )
                 
                 if caption_segments:
@@ -249,7 +250,8 @@ class VibeVoiceProcessorSimpleCaptions(VibeVoiceProcessor):
         caption_segments = self.caption_generator.generate_captions_from_script(
             script=original_script,
             audio_duration=duration,
-            speaker_mapping=speaker_mapping
+            speaker_mapping=speaker_mapping,
+            audio_path=audio_path
         )
         
         # Split long segments
